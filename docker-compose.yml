@@ -1,0 +1,7 @@
+services:
+  castle-chef:
+    build: .
+    ports:
+      - "8080:80"
+    container_name: castle-chef-game
+    restart: unless-stopped
