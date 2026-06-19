@@ -17,5 +17,8 @@ class Game extends Phaser.Game {
 }
 
 window.addEventListener('load', () => {
-  new Game(gameConfig);
+  const game = new Game(gameConfig);
+  if (import.meta.env.DEV) {
+    window.__CASTLE_CHEF_GAME__ = game;
+  }
 });

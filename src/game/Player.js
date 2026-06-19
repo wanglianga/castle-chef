@@ -23,7 +23,7 @@ export class Player {
     this.dashDirection = { x: 0, y: 0 };
     this.facing = 'down';
     this.inventory = [];
-    this.maxInventory = 2;
+    this.maxInventory = 3;
     this.hurtFlashTimer = 0;
 
     this.body = scene.add.container(x, y);
@@ -31,10 +31,11 @@ export class Player {
     const bodyCircle = scene.add.circle(0, 0, 20, COLORS.GOLD_LIGHT).setStrokeStyle(3, COLORS.BROWN_DARK);
     const hat = scene.add.text(0, -18, '👨‍🍳', { fontSize: '28px' }).setOrigin(0.5);
 
-    this.heldItem1 = scene.add.text(-18, 22, '', { fontSize: '20px' }).setOrigin(0.5);
-    this.heldItem2 = scene.add.text(18, 22, '', { fontSize: '20px' }).setOrigin(0.5);
+    this.heldItem1 = scene.add.text(-22, 22, '', { fontSize: '18px' }).setOrigin(0.5);
+    this.heldItem2 = scene.add.text(0, 24, '', { fontSize: '18px' }).setOrigin(0.5);
+    this.heldItem3 = scene.add.text(22, 22, '', { fontSize: '18px' }).setOrigin(0.5);
 
-    this.body.add([bodyCircle, hat, this.heldItem1, this.heldItem2]);
+    this.body.add([bodyCircle, hat, this.heldItem1, this.heldItem2, this.heldItem3]);
     this.body.setDepth(10);
 
     this.cursors = scene.input.keyboard.addKeys({
@@ -151,16 +152,9 @@ export class Player {
   }
 
   updateInventoryDisplay() {
-    if (this.inventory[0]) {
-      this.heldItem1.setText(this.inventory[0].getDisplayInfo().emoji);
-    } else {
-      this.heldItem1.setText('');
-    }
-    if (this.inventory[1]) {
-      this.heldItem2.setText(this.inventory[1].getDisplayInfo().emoji);
-    } else {
-      this.heldItem2.setText('');
-    }
+    this.heldItem1.setText(this.inventory[0] ? this.inventory[0].getDisplayInfo().emoji : '');
+    this.heldItem2.setText(this.inventory[1] ? this.inventory[1].getDisplayInfo().emoji : '');
+    this.heldItem3.setText(this.inventory[2] ? this.inventory[2].getDisplayInfo().emoji : '');
   }
 
   takeDamage() {

@@ -39,11 +39,13 @@ export class HUD {
       <span class="inventory-label">手持</span>
       <div class="inventory-slot" id="inv-slot-1"></div>
       <div class="inventory-slot" id="inv-slot-2"></div>
+      <div class="inventory-slot" id="inv-slot-3"></div>
     `;
     container.appendChild(this.inventoryEl);
 
     this.invSlot1 = this.inventoryEl.querySelector('#inv-slot-1');
     this.invSlot2 = this.inventoryEl.querySelector('#inv-slot-2');
+    this.invSlot3 = this.inventoryEl.querySelector('#inv-slot-3');
 
     this.hintEl = document.createElement('div');
     this.hintEl.className = 'hint-text';
@@ -76,19 +78,15 @@ export class HUD {
   }
 
   updateInventory(inventory) {
-    if (inventory[0]) {
-      this.invSlot1.textContent = inventory[0].getDisplayInfo().emoji;
-      this.invSlot1.classList.add('filled');
-    } else {
-      this.invSlot1.textContent = '';
-      this.invSlot1.classList.remove('filled');
-    }
-    if (inventory[1]) {
-      this.invSlot2.textContent = inventory[1].getDisplayInfo().emoji;
-      this.invSlot2.classList.add('filled');
-    } else {
-      this.invSlot2.textContent = '';
-      this.invSlot2.classList.remove('filled');
+    const slots = [this.invSlot1, this.invSlot2, this.invSlot3];
+    for (let i = 0; i < slots.length; i++) {
+      if (inventory[i]) {
+        slots[i].textContent = inventory[i].getDisplayInfo().emoji;
+        slots[i].classList.add('filled');
+      } else {
+        slots[i].textContent = '';
+        slots[i].classList.remove('filled');
+      }
     }
   }
 

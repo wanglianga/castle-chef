@@ -1,4 +1,3 @@
-import Phaser from 'phaser';
 import { uid } from '../utils/helpers.js';
 import { INGREDIENT_DISPLAY } from '../utils/constants.js';
 
@@ -47,40 +46,55 @@ export class Ingredient {
   startProcessing(type) {
     this.processingType = type;
     this.processProgress = 0;
+    this.cookPhase = 'processing';
     this.progressBar.setVisible(true);
     this.progressFill.setVisible(true);
+    this.progressFill.fillColor = 0xf0c75e;
   }
 
   updateProcessing(delta, totalTime) {
-    if (!this.processingType) return false;
+    if (!this.processingType) return { done: false, burnt: false };
     this.processProgress += delta / totalTime;
 
-    this.progressFill.width = Math.min(34, this.processProgress * 34);
-    if (this.processingType === 'cook' && this.processProgress > 1) {
-      const burnProgress = (this.processProgress - 1) * (totalTime / 5);
-      this.progressFill.fillColor = burnProgress > 0.5 ? 0xe63946 : 0xff7b29;
+    if (this.processingType === 'cook') {
+      if (this.processProgress >= 1 && this.cookPhase === 'processing') {
+        this.cookPhase = 'cooked';
+        this.state = 'cooked';
+        this.updateDisplay();
+        this.progressFill.fillColor = 0xff7b29;
+      }
+      if (this.processProgress >= 1 + (5 / totalTime)) {
+        this.cookPhase = 'burnt';
+        this.state = 'burnt';
+        this.updateDisplay();
+        this.progressFill.fillColor = 0xe63946;
+        return { done: true, burnt: true };
+      }
+      if (this.processProgress >= 1) {
+        this.progressFill.width = Math.min(34, ((this.processProgress - 1) / (5 / totalTime)) * 34);
+      } else {
+        this.progressFill.width = Math.min(34, this.processProgress * 34);
+      }
+    } else {
+      this.progressFill.width = Math.min(34, this.processProgress * 34);
+      if (this.processProgress >= 1) {
+        return { done: true, burnt: false };
+      }
     }
-
-    if (this.processProgress >= 1) {
-      return true;
-    }
-    return false;
+    return { done: false, burnt: false };
   }
 
   finishProcessing() {
     if (this.processingType === 'chop') {
       this.state = 'sliced';
-    } else if (this.processingType === 'cook') {
-      if (this.processProgress >= 1 + (5 / 3)) {
-        this.state = 'burnt';
-      } else {
-        this.state = 'cooked';
-      }
     } else if (this.processingType === 'sauce') {
       this.state = 'sauced';
+    } else if (this.processingType === 'cook' && this.cookPhase === 'burnt') {
+      this.state = 'burnt';
     }
     this.processingType = null;
     this.processProgress = 0;
+    this.cookPhase = null;
     this.progressBar.setVisible(false);
     this.progressFill.setVisible(false);
     this.progressFill.width = 0;
@@ -89,8 +103,19 @@ export class Ingredient {
   }
 
   cancelProcessing() {
+    if (this.processingType === 'cook' && this.cookPhase === 'cooked') {
+      this.processingType = null;
+      this.processProgress = 0;
+      this.cookPhase = null;
+      this.progressBar.setVisible(false);
+      this.progressFill.setVisible(false);
+      this.progressFill.width = 0;
+      this.progressFill.fillColor = 0xf0c75e;
+      return;
+    }
     this.processingType = null;
     this.processProgress = 0;
+    this.cookPhase = null;
     this.progressBar.setVisible(false);
     this.progressFill.setVisible(false);
     this.progressFill.width = 0;

@@ -154,9 +154,13 @@ export class Workstation {
         else if (this.type === 'cook') processTime = COOK_TIME;
         else if (this.type === 'sauce') processTime = SAUCE_TIME;
 
-        const done = ing.updateProcessing(delta / 1000, processTime);
-        if (done && this.type !== 'cook') {
-          ing.finishProcessing();
+        const result = ing.updateProcessing(delta / 1000, processTime);
+        if (result.done) {
+          if (result.burnt) {
+            ing.finishProcessing();
+          } else if (this.type !== 'cook') {
+            ing.finishProcessing();
+          }
         }
       }
     }

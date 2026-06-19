@@ -53,8 +53,8 @@ export class GameScene extends Phaser.Scene {
     this.createUI();
 
     this.spawnInitialIngredients();
-    this.spawnOrder();
-    this.spawnOrder();
+    this.orders.push(new Order({ recipe: { id: 'classic_meat', name: '经典烤肉', emoji: '🍽️', required: ['cooked_meat', 'sliced_veggie'], baseScore: 100, timeLimit: 60 }, targetTable: 1 }));
+    this.orders.push(new Order({ recipe: { id: 'cheese_sandwich', name: '芝士三明治', emoji: '🥪', required: ['sliced_bread', 'sliced_cheese', 'sauced_tomato'], baseScore: 150, timeLimit: 90 }, targetTable: 2 }));
 
     this.cameras.main.fadeIn(500);
   }
@@ -245,17 +245,40 @@ export class GameScene extends Phaser.Scene {
     const invCount = this.player.inventory.length;
     let hint = '';
 
+    const hasReadyIngredient = ws.ingredients.some(i => {
+      if (ws.type === WORKSTATION_TYPES.COOK) {
+        return i.cookPhase === 'cooked' || i.cookPhase === 'burnt' || !i.processingType;
+      }
+      return !i.processingType;
+    });
+
     if (ws.type === WORKSTATION_TYPES.STORAGE) {
       hint = invCount < this.player.maxInventory ? `[空格] 从${ws.workstationName}取食材` : '背包已满！';
     } else if (ws.type === WORKSTATION_TYPES.SERVE) {
-      hint = invCount > 0 ? `[空格] 送餐到桌${ws.tableNumber}` : '请先装盘！';
+      const plateWs = this.workstations.find(w => w.type === WORKSTATION_TYPES.PLATE);
+      const hasTrayDish = plateWs && plateWs.ingredients.length > 0;
+      hint = invCount > 0 || hasTrayDish ? `[空格] 送餐到桌${ws.tableNumber}` : '请先装盘！';
     } else if (ws.type === WORKSTATION_TYPES.PLATE) {
       hint = invCount > 0 ? '[空格] 放下食材装盘' : (ws.ingredients.length > 0 ? '[空格] 取走装盘' : '请携带食材');
+    } else if (ws.type === WORKSTATION_TYPES.COOK) {
+      const cookingMeat = ws.ingredients.find(i => i.processingType);
+      if (cookingMeat && cookingMeat.cookPhase === 'cooked') {
+        hint = invCount < this.player.maxInventory ? `[空格] 取出烤肉(快！别烧焦了)` : '背包已满！';
+      } else if (cookingMeat && cookingMeat.cookPhase === 'processing') {
+        hint = '🔥 正在烤制中...';
+      } else if (hasReadyIngredient) {
+        hint = invCount < this.player.maxInventory ? `[空格] 从${ws.workstationName}取走` : '背包已满！';
+      } else if (invCount > 0) {
+        const canAccept = this.player.inventory.some(ing => ws.canAccept(ing));
+        hint = canAccept ? `[空格] 放入${ws.workstationName}` : `该食材不能在此加工`;
+      } else {
+        hint = ws.workstationName;
+      }
     } else {
       if (invCount > 0) {
         const canAccept = this.player.inventory.some(ing => ws.canAccept(ing));
         hint = canAccept ? `[空格] 放入${ws.workstationName}` : `该食材不能在此加工`;
-      } else if (ws.ingredients.length > 0) {
+      } else if (hasReadyIngredient) {
         hint = `[空格] 从${ws.workstationName}取走`;
       } else {
         hint = ws.workstationName;
@@ -279,36 +302,56 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (ws.type === WORKSTATION_TYPES.PLATE) {
-      if (ws.ingredients.length > 0 && this.player.inventory.length < this.player.maxInventory) {
-        const ing = ws.ingredients[ws.ingredients.length - 1];
-        ws.removeIngredient(ing);
-        this.player.pickup(ing);
-      } else if (this.player.inventory.length > 0) {
-        const ing = this.player.drop();
-        if (ing) ws.addIngredient(ing);
+      if (this.player.inventory.length > 0 && ws.ingredients.length < ws.maxIngredients) {
+        this.moveInventoryIngredientToWorkstation(ws);
+      } else if (ws.ingredients.length > 0 && this.player.inventory.length < this.player.maxInventory) {
+        this.pickupReadyIngredientsFromWorkstation(ws);
       }
       return;
     }
 
     if (ws.ingredients.length > 0 && this.player.inventory.length < this.player.maxInventory) {
-      const ready = ws.ingredients.filter(i => !i.processingType);
-      if (ready.length > 0) {
-        const ing = ready[ready.length - 1];
-        ws.removeIngredient(ing);
-        this.player.pickup(ing);
-      }
+      this.pickupReadyIngredientsFromWorkstation(ws);
     } else if (this.player.inventory.length > 0) {
-      for (let i = this.player.inventory.length - 1; i >= 0; i--) {
-        const ing = this.player.inventory[i];
-        if (ws.canAccept(ing)) {
-          this.player.inventory.splice(i, 1);
-          ws.addIngredient(ing);
-          ing.isHeld = false;
-          this.player.updateInventoryDisplay();
-          break;
-        }
+      this.moveInventoryIngredientToWorkstation(ws);
+    }
+  }
+
+  isIngredientReadyForPickup(ws, ingredient) {
+    if (ws.type === WORKSTATION_TYPES.COOK) {
+      return ingredient.cookPhase === 'cooked' || ingredient.cookPhase === 'burnt' || !ingredient.processingType;
+    }
+    return !ingredient.processingType;
+  }
+
+  pickupReadyIngredientsFromWorkstation(ws) {
+    const freeSlots = this.player.maxInventory - this.player.inventory.length;
+    if (freeSlots <= 0) return;
+
+    const ready = ws.ingredients.filter(ingredient => this.isIngredientReadyForPickup(ws, ingredient));
+    const pickupCount = ws.type === WORKSTATION_TYPES.PLATE ? freeSlots : 1;
+
+    for (const ingredient of ready.slice(-pickupCount)) {
+      if (!ws.removeIngredient(ingredient)) continue;
+      if (!this.player.pickup(ingredient)) {
+        ws.addIngredient(ingredient);
+        break;
       }
     }
+  }
+
+  moveInventoryIngredientToWorkstation(ws) {
+    for (let i = this.player.inventory.length - 1; i >= 0; i--) {
+      const ing = this.player.inventory[i];
+      if (ws.canAccept(ing)) {
+        this.player.inventory.splice(i, 1);
+        ws.addIngredient(ing);
+        ing.isHeld = false;
+        this.player.updateInventoryDisplay();
+        return true;
+      }
+    }
+    return false;
   }
 
   tryPickupNearby() {
@@ -326,24 +369,50 @@ export class GameScene extends Phaser.Scene {
   }
 
   tryServe(serveWs) {
-    if (this.player.inventory.length === 0) return;
-
     const plateWs = this.workstations.find(w => w.type === WORKSTATION_TYPES.PLATE);
-    const heldTypes = this.player.getInventoryTypes();
+    const deliverySources = [
+      {
+        ingredients: this.player.inventory,
+        types: this.player.getInventoryTypes(),
+        clear: ingredients => {
+          for (const ing of ingredients) {
+            const idx = this.ingredients.indexOf(ing);
+            if (idx >= 0) this.ingredients.splice(idx, 1);
+            ing.destroy();
+          }
+          this.player.clearInventory();
+        }
+      },
+      {
+        ingredients: plateWs ? plateWs.ingredients : [],
+        types: plateWs ? plateWs.getProcessedTypes() : [],
+        clear: ingredients => {
+          for (const ing of ingredients) {
+            if (plateWs) plateWs.removeIngredient(ing);
+            const idx = this.ingredients.indexOf(ing);
+            if (idx >= 0) this.ingredients.splice(idx, 1);
+            ing.destroy();
+          }
+          if (plateWs) plateWs.updateIngredientPositions();
+        }
+      }
+    ].filter(source => source.ingredients.length > 0);
+
+    if (deliverySources.length === 0) return;
 
     let matched = false;
     for (const order of this.orders) {
       if (order.completed || order.failed) continue;
       if (order.targetTable !== serveWs.tableNumber) continue;
-      if (order.checkDish(heldTypes)) {
-        matched = true;
-        this.completeOrder(order);
-        for (const ing of this.player.inventory) {
-          const idx = this.ingredients.indexOf(ing);
-          if (idx >= 0) this.ingredients.splice(idx, 1);
-          ing.destroy();
+      for (const source of deliverySources) {
+        if (order.checkDish(source.types)) {
+          matched = true;
+          this.completeOrder(order);
+          source.clear([...source.ingredients]);
+          break;
         }
-        this.player.clearInventory();
+      }
+      if (matched) {
         break;
       }
     }
@@ -351,13 +420,18 @@ export class GameScene extends Phaser.Scene {
     if (!matched) {
       this.addScore(-WRONG_ORDER_PENALTY, serveWs.x, serveWs.y, '送错了!');
       this.combo = 0;
-      for (const ing of this.player.inventory) {
+      const source = this.player.inventory.length > 0 ? this.player.inventory : (plateWs ? plateWs.ingredients : []);
+      for (const ing of [...source]) {
+        if (plateWs && ing.onWorkstation === plateWs) {
+          plateWs.removeIngredient(ing);
+        }
         const idx = this.ingredients.indexOf(ing);
         if (idx < 0) this.ingredients.push(ing);
         ing.isHeld = false;
         ing.setPosition(serveWs.x + (Math.random() - 0.5) * 30, serveWs.y + 50);
       }
       this.player.clearInventory();
+      if (plateWs) plateWs.updateIngredientPositions();
     }
   }
 
