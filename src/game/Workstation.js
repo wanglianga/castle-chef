@@ -63,6 +63,9 @@ export class Workstation {
 
     this.glow = scene.add.rectangle(x, y, this.width + 10, this.height + 10, COLORS.GOLD, 0)
       .setDepth(1);
+
+    this.speedModifier = 1;
+    this.fireIntensity = 1;
   }
 
   update(delta) {
@@ -154,7 +157,14 @@ export class Workstation {
         else if (this.type === 'cook') processTime = COOK_TIME;
         else if (this.type === 'sauce') processTime = SAUCE_TIME;
 
-        const result = ing.updateProcessing(delta / 1000, processTime);
+        let effectiveDelta = delta / 1000;
+        effectiveDelta *= this.speedModifier;
+
+        if (this.type === 'cook') {
+          effectiveDelta *= this.fireIntensity;
+        }
+
+        const result = ing.updateProcessing(effectiveDelta, processTime);
         if (result.done) {
           if (result.burnt) {
             ing.finishProcessing();
@@ -164,6 +174,14 @@ export class Workstation {
         }
       }
     }
+  }
+
+  setSpeedModifier(modifier) {
+    this.speedModifier = Math.max(0.5, Math.min(2.0, modifier));
+  }
+
+  setFireIntensity(intensity) {
+    this.fireIntensity = Math.max(0.3, Math.min(1.8, intensity));
   }
 
   getProcessedTypes() {

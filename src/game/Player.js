@@ -25,6 +25,9 @@ export class Player {
     this.inventory = [];
     this.maxInventory = 3;
     this.hurtFlashTimer = 0;
+    this.speedBoost = 0;
+    this.speedBoostTimer = 0;
+    this.speedBoostStacks = 0;
 
     this.body = scene.add.container(x, y);
 
@@ -58,6 +61,12 @@ export class Player {
   update(delta) {
     this.dashCooldown = Math.max(0, this.dashCooldown - delta);
     this.hurtFlashTimer = Math.max(0, this.hurtFlashTimer - delta);
+    this.speedBoostTimer = Math.max(0, this.speedBoostTimer - delta);
+
+    if (this.speedBoostTimer <= 0) {
+      this.speedBoost = 0;
+      this.speedBoostStacks = 0;
+    }
 
     if (this.hurtFlashTimer > 0) {
       this.body.alpha = Math.sin(this.hurtFlashTimer * 0.03) > 0 ? 1 : 0.3;
@@ -74,9 +83,11 @@ export class Player {
       return;
     }
 
+    const speedMultiplier = 1 + this.speedBoost;
+
     if (this.isDashing) {
       this.dashTimer -= delta;
-      const speed = PLAYER_DASH_SPEED * (delta / 1000);
+      const speed = PLAYER_DASH_SPEED * speedMultiplier * (delta / 1000);
       this.x += this.dashDirection.x * speed;
       this.y += this.dashDirection.y * speed;
 
@@ -101,7 +112,7 @@ export class Player {
           this.facing = dy > 0 ? 'down' : 'up';
         }
 
-        const speed = PLAYER_SPEED * (delta / 1000);
+        const speed = PLAYER_SPEED * speedMultiplier * (delta / 1000);
         this.x += dx * speed;
         this.y += dy * speed;
       }
@@ -157,13 +168,45 @@ export class Player {
     this.heldItem3.setText(this.inventory[2] ? this.inventory[2].getDisplayInfo().emoji : '');
   }
 
-  takeDamage() {
+  takeDamage(dropDishes = false) {
     if (this.isStunned || this.hurtFlashTimer > 0) return false;
     this.health = Math.max(0, this.health - 1);
     this.isStunned = true;
     this.stunTimer = PLAYER_STUN_DURATION;
     this.hurtFlashTimer = 1500;
-    return true;
+    this.clearSpeedBoost();
+
+    let droppedIngredients = [];
+    if (dropDishes && this.inventory.length > 0) {
+      droppedIngredients = [...this.inventory];
+      for (const ing of this.inventory) {
+        ing.isHeld = false;
+        ing.setPosition(
+          this.x + (Math.random() - 0.5) * 60,
+          this.y + (Math.random() - 0.5) * 60
+        );
+      }
+      this.inventory = [];
+      this.updateInventoryDisplay();
+    }
+    return { damaged: true, dropped: droppedIngredients };
+  }
+
+  addSpeedBoost(amount, duration, maxStacks = 3) {
+    this.speedBoostStacks = Math.min(maxStacks, this.speedBoostStacks + 1);
+    this.speedBoost = amount * this.speedBoostStacks;
+    this.speedBoostTimer = duration;
+    return this.speedBoostStacks;
+  }
+
+  clearSpeedBoost() {
+    this.speedBoost = 0;
+    this.speedBoostStacks = 0;
+    this.speedBoostTimer = 0;
+  }
+
+  getSpeedBoostPercent() {
+    return this.speedBoost * 100;
   }
 
   isDead() {

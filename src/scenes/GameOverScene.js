@@ -12,6 +12,7 @@ export class GameOverScene extends Phaser.Scene {
     this.maxCombo = data.maxCombo || 0;
     this.ordersCompleted = data.ordersCompleted || 0;
     this.ordersFailed = data.ordersFailed || 0;
+    this.trapDodgeCount = data.trapDodgeCount || 0;
   }
 
   create() {
@@ -21,8 +22,8 @@ export class GameOverScene extends Phaser.Scene {
     const completionRate = totalOrders > 0 ? Math.round((this.ordersCompleted / totalOrders) * 100) : 0;
 
     let stars = 1;
-    if (this.finalScore >= 500) stars = 2;
-    if (this.finalScore >= 1000) stars = 3;
+    if (this.finalScore >= 1500) stars = 2;
+    if (this.finalScore >= 3000) stars = 3;
 
     this.cameras.main.fadeIn(800);
 
@@ -31,7 +32,7 @@ export class GameOverScene extends Phaser.Scene {
     this.screenEl = document.createElement('div');
     this.screenEl.className = 'gameover-screen visible';
     this.screenEl.innerHTML = `
-      <div class="gameover-title">${this.finalScore >= 500 ? '🏆 宴会成功!' : '⏰ 时间到!'}</div>
+      <div class="gameover-title">${this.finalScore >= 1500 ? '🏆 宴会成功!' : '⏰ 时间到!'}</div>
       <div class="gameover-score">${this.finalScore}</div>
       ${isNewRecord ? '<div class="gameover-new-record">✨ 新纪录! ✨</div>' : ''}
       <div class="gameover-stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
@@ -43,6 +44,10 @@ export class GameOverScene extends Phaser.Scene {
         <div class="gameover-stat">
           <div class="gameover-stat-label">完成订单</div>
           <div class="gameover-stat-value">${this.ordersCompleted}</div>
+        </div>
+        <div class="gameover-stat">
+          <div class="gameover-stat-label">机关躲避</div>
+          <div class="gameover-stat-value">${this.trapDodgeCount}</div>
         </div>
         <div class="gameover-stat">
           <div class="gameover-stat-label">成功率</div>

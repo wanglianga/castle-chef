@@ -112,8 +112,127 @@ export const TRAP_TYPES = {
   SPIKE: 'spike',
   MOVING_PLATFORM: 'platform',
   ROTATING: 'rotating',
-  TELEPORT: 'teleport'
+  TELEPORT: 'teleport',
+  FLOOR_ROTATION: 'floor_rotation',
+  FIRE_FLUCTUATION: 'fire_fluctuation',
+  WINDOW_SWAP: 'window_swap',
+  KNIFE_SLIDE: 'knife_slide'
 };
+
+export const GUEST_TYPES = {
+  KING: 'king',
+  KNIGHT: 'knight',
+  MUSICIAN: 'musician',
+  ALCHEMIST: 'alchemist',
+  CHILD: 'child'
+};
+
+export const GUEST_CONFIG = {
+  king: {
+    name: '国王',
+    emoji: '👑',
+    patienceMultiplier: 0.7,
+    baseScoreMultiplier: 2.0,
+    tipMultiplier: 3.0,
+    comboBonus: 0.3,
+    orderRefreshSpeed: 0.5,
+    kitchenSpeedBoost: 1.5,
+    priority: 1,
+    chainEffect: 'royal_feast',
+    description: '高优先级，短耐心，完成后大幅提升后续小费和厨房速度'
+  },
+  knight: {
+    name: '骑士',
+    emoji: '⚔️',
+    patienceMultiplier: 0.85,
+    baseScoreMultiplier: 1.5,
+    tipMultiplier: 1.5,
+    comboBonus: 0.15,
+    orderRefreshSpeed: 0.8,
+    kitchenSpeedBoost: 1.2,
+    priority: 2,
+    chainEffect: 'warrior_spirit',
+    description: '中高优先级，中等耐心，完成后提升连击倍率'
+  },
+  musician: {
+    name: '乐师',
+    emoji: '🎵',
+    patienceMultiplier: 1.3,
+    baseScoreMultiplier: 1.2,
+    tipMultiplier: 2.0,
+    comboBonus: 0.2,
+    orderRefreshSpeed: 1.2,
+    kitchenSpeedBoost: 1.1,
+    priority: 3,
+    chainEffect: 'melodic_flow',
+    description: '中优先级，长耐心，完成后加快订单刷新'
+  },
+  alchemist: {
+    name: '炼金术士',
+    emoji: '⚗️',
+    patienceMultiplier: 1.0,
+    baseScoreMultiplier: 1.8,
+    tipMultiplier: 2.5,
+    comboBonus: 0.25,
+    orderRefreshSpeed: 0.7,
+    kitchenSpeedBoost: 1.3,
+    priority: 2,
+    chainEffect: 'mystic_transmutation',
+    description: '中高优先级，中等耐心，完成后随机提升所有加成'
+  },
+  child: {
+    name: '小孩',
+    emoji: '👶',
+    patienceMultiplier: 0.5,
+    baseScoreMultiplier: 0.8,
+    tipMultiplier: 0.5,
+    comboBonus: 0.05,
+    orderRefreshSpeed: 1.5,
+    kitchenSpeedBoost: 0.9,
+    priority: 4,
+    chainEffect: 'childish_chaos',
+    description: '低优先级，极短耐心，完成后打乱订单刷新节奏'
+  }
+};
+
+export const CHAIN_EFFECTS = {
+  royal_feast: {
+    name: '皇家盛宴',
+    duration: 30,
+    tipBoost: 0.5,
+    kitchenSpeed: 0.3,
+    description: '小费+50%，厨房速度+30%'
+  },
+  warrior_spirit: {
+    name: '战士之魂',
+    duration: 20,
+    comboBoost: 0.2,
+    description: '连击额外+20%'
+  },
+  melodic_flow: {
+    name: '旋律之流',
+    duration: 25,
+    orderRefresh: 0.4,
+    description: '订单刷新速度+40%'
+  },
+  mystic_transmutation: {
+    name: '神秘嬗变',
+    duration: 15,
+    randomBoost: true,
+    description: '随机获得20%-60%的全属性加成'
+  },
+  childish_chaos: {
+    name: '顽童胡闹',
+    duration: 10,
+    orderShuffle: true,
+    speedPenalty: 0.2,
+    description: '订单顺序打乱，厨房速度-20%'
+  }
+};
+
+export const TRAP_DODGE_SPEED_BOOST = 0.3;
+export const TRAP_DODGE_BOOST_DURATION = 3000;
+export const MAX_TRAP_DODGE_STACK = 3;
 
 export const COLORS = {
   BROWN_DARK: 0x3d2817,

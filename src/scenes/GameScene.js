@@ -22,7 +22,13 @@ import {
   INGREDIENT_TYPES,
   WORKSTATION_TYPES,
   TRAP_TYPES,
-  PLAYER_MAX_HEALTH
+  PLAYER_MAX_HEALTH,
+  GUEST_TYPES,
+  GUEST_CONFIG,
+  CHAIN_EFFECTS,
+  TRAP_DODGE_SPEED_BOOST,
+  TRAP_DODGE_BOOST_DURATION,
+  MAX_TRAP_DODGE_STACK
 } from '../utils/constants.js';
 import { randomChoice, clamp } from '../utils/helpers.js';
 
@@ -46,6 +52,15 @@ export class GameScene extends Phaser.Scene {
     this.workstations = [];
     this.traps = [];
 
+    this.activeChainEffects = [];
+    this.globalScoreMultiplier = 1;
+    this.globalKitchenSpeedModifier = 1;
+    this.globalOrderSpawnModifier = 1;
+    this.globalComboBonus = 0;
+
+    this.trapDodgeCount = 0;
+    this.consecutiveDodges = 0;
+
     this.createMap();
     this.createWorkstations();
     this.createTraps();
@@ -53,8 +68,16 @@ export class GameScene extends Phaser.Scene {
     this.createUI();
 
     this.spawnInitialIngredients();
-    this.orders.push(new Order({ recipe: { id: 'classic_meat', name: '经典烤肉', emoji: '🍽️', required: ['cooked_meat', 'sliced_veggie'], baseScore: 100, timeLimit: 60 }, targetTable: 1 }));
-    this.orders.push(new Order({ recipe: { id: 'cheese_sandwich', name: '芝士三明治', emoji: '🥪', required: ['sliced_bread', 'sliced_cheese', 'sauced_tomato'], baseScore: 150, timeLimit: 90 }, targetTable: 2 }));
+    this.orders.push(new Order({
+      recipe: { id: 'classic_meat', name: '经典烤肉', emoji: '🍽️', required: ['cooked_meat', 'sliced_veggie'], baseScore: 100, timeLimit: 60 },
+      targetTable: 1,
+      guestType: GUEST_TYPES.KING
+    }));
+    this.orders.push(new Order({
+      recipe: { id: 'cheese_sandwich', name: '芝士三明治', emoji: '🥪', required: ['sliced_bread', 'sliced_cheese', 'sauced_tomato'], baseScore: 150, timeLimit: 90 },
+      targetTable: 2,
+      guestType: GUEST_TYPES.KNIGHT
+    }));
 
     this.cameras.main.fadeIn(500);
   }
@@ -113,6 +136,22 @@ export class GameScene extends Phaser.Scene {
     this.traps.push(new Trap(this, 150, 620, TRAP_TYPES.TELEPORT, {
       targetX: 1100, targetY: 150, cooldown: 6
     }));
+
+    this.traps.push(new Trap(this, 640, 450, TRAP_TYPES.FLOOR_ROTATION, {
+      period: 4, radius: 75, rotationSpeed: 2.0
+    }));
+
+    this.traps.push(new Trap(this, 450, 280, TRAP_TYPES.FIRE_FLUCTUATION, {
+      period: 5, affectedRadius: 90
+    }));
+
+    this.traps.push(new Trap(this, 1130, 425, TRAP_TYPES.WINDOW_SWAP, {
+      table1: 1, table2: 2, cooldown: 10
+    }));
+
+    this.traps.push(new Trap(this, 820, 180, TRAP_TYPES.KNIFE_SLIDE, {
+      axis: 'x', range: 100, speed: 2.5
+    }));
   }
 
   createPlayer() {
@@ -170,7 +209,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.orderSpawnTimer -= delta / 1000;
+    this.updateChainEffects(delta);
+    this.updateWorkstationSpeeds();
+    this.updateFireIntensity();
+    this.checkWindowSwaps();
+
+    const orderTimeModifier = this.globalOrderSpawnModifier;
+    this.orderSpawnTimer -= (delta / 1000) * orderTimeModifier;
     if (this.orderSpawnTimer <= 0) {
       this.spawnOrder();
       this.orderSpawnTimer = ORDER_SPAWN_INTERVAL;
@@ -185,13 +230,14 @@ export class GameScene extends Phaser.Scene {
     for (const trap of this.traps) {
       trap.update(delta, this.player,
         () => this.onPlayerHitByTrap(),
-        () => this.onPlayerTeleport()
+        () => this.onPlayerTeleport(),
+        (trapType) => this.onTrapDodge(trapType)
       );
     }
 
     for (const order of this.orders) {
       const wasFailed = order.failed;
-      order.update(delta);
+      order.update(delta, 1);
       if (order.failed && !wasFailed) {
         this.onOrderFailed(order);
       }
@@ -209,6 +255,125 @@ export class GameScene extends Phaser.Scene {
 
     this.handleInput();
     this.updateUI();
+  }
+
+  updateChainEffects(delta) {
+    for (let i = this.activeChainEffects.length - 1; i >= 0; i--) {
+      const effect = this.activeChainEffects[i];
+      effect.timeLeft -= delta / 1000;
+      if (effect.timeLeft <= 0) {
+        this.activeChainEffects.splice(i, 1);
+        this.recalculateGlobalModifiers();
+      }
+    }
+  }
+
+  updateWorkstationSpeeds() {
+    const baseSpeed = this.globalKitchenSpeedModifier;
+    for (const ws of this.workstations) {
+      if (ws.type !== WORKSTATION_TYPES.STORAGE && ws.type !== WORKSTATION_TYPES.SERVE) {
+        ws.setSpeedModifier(baseSpeed);
+      }
+    }
+  }
+
+  updateFireIntensity() {
+    const fireTrap = this.traps.find(t => t.type === TRAP_TYPES.FIRE_FLUCTUATION);
+    if (!fireTrap) return;
+
+    const intensity = fireTrap.getFireIntensity();
+    const cookIntensity = 0.6 + intensity * 1.2;
+
+    for (const ws of this.workstations) {
+      if (ws.type === WORKSTATION_TYPES.COOK) {
+        ws.setFireIntensity(cookIntensity);
+      }
+    }
+  }
+
+  checkWindowSwaps() {
+    const swapTraps = this.traps.filter(t => t.type === TRAP_TYPES.WINDOW_SWAP);
+    for (const trap of swapTraps) {
+      const dist = Math.hypot(trap.x - this.player.x, trap.y - this.player.y);
+      if (dist < 50 && this.player.isInteractJustDown()) {
+        if (trap.swapTables(this.orders)) {
+          this.showFloatFeedback(trap.x, trap.y - 40, '传送窗换位!', 'positive');
+          this.consecutiveDodges = 0;
+        }
+      }
+    }
+  }
+
+  recalculateGlobalModifiers() {
+    this.globalScoreMultiplier = 1;
+    this.globalKitchenSpeedModifier = 1;
+    this.globalOrderSpawnModifier = 1;
+    this.globalComboBonus = 0;
+
+    for (const effect of this.activeChainEffects) {
+      if (effect.tipBoost) this.globalScoreMultiplier += effect.tipBoost;
+      if (effect.kitchenSpeed) this.globalKitchenSpeedModifier += effect.kitchenSpeed;
+      if (effect.orderRefresh) this.globalOrderSpawnModifier += effect.orderRefresh;
+      if (effect.comboBoost) this.globalComboBonus += effect.comboBoost;
+      if (effect.speedPenalty) this.globalKitchenSpeedModifier -= effect.speedPenalty;
+      if (effect.randomBoost) {
+        const boost = 0.2 + Math.random() * 0.4;
+        this.globalScoreMultiplier += boost;
+        this.globalKitchenSpeedModifier += boost;
+        this.globalOrderSpawnModifier += boost;
+      }
+      if (effect.orderShuffle) {
+        this.orders = this.orders.sort(() => Math.random() - 0.5);
+      }
+    }
+  }
+
+  activateChainEffect(effectType) {
+    const effectConfig = CHAIN_EFFECTS[effectType];
+    if (!effectConfig) return;
+
+    const existing = this.activeChainEffects.find(e => e.type === effectType);
+    if (existing) {
+      existing.timeLeft = effectConfig.duration;
+    } else {
+      this.activeChainEffects.push({
+        type: effectType,
+        name: effectConfig.name,
+        description: effectConfig.description,
+        timeLeft: effectConfig.duration,
+        ...effectConfig
+      });
+    }
+
+    this.recalculateGlobalModifiers();
+    this.showFloatFeedback(640, 360, `${effectConfig.name}!`, 'combo');
+  }
+
+  onTrapDodge(trapType) {
+    this.trapDodgeCount++;
+    this.consecutiveDodges++;
+
+    const stacks = this.player.addSpeedBoost(
+      TRAP_DODGE_SPEED_BOOST,
+      TRAP_DODGE_BOOST_DURATION,
+      MAX_TRAP_DODGE_STACK
+    );
+
+    const trapNames = {
+      spike: '尖刺',
+      rotating: '旋转障碍',
+      floor_rotation: '旋转地板',
+      fire_fluctuation: '火焰',
+      knife_slide: '飞刀'
+    };
+
+    const name = trapNames[trapType] || '机关';
+    this.showFloatFeedback(
+      this.player.x,
+      this.player.y - 50,
+      `躲过${name}! +${Math.round(TRAP_DODGE_SPEED_BOOST * 100 * stacks)}%`,
+      'positive'
+    );
   }
 
   handleInput() {
@@ -440,10 +605,29 @@ export class GameScene extends Phaser.Scene {
     this.ordersCompleted++;
     this.combo++;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
+    this.consecutiveDodges = 0;
 
-    const multiplier = 1 + Math.min(MAX_COMBO_MULTIPLIER - 1, this.combo * COMBO_MULTIPLIER);
-    const bonus = Math.round(order.baseScore * multiplier);
-    this.addScore(bonus, order.x || 640, order.y || 200, `+${bonus}`);
+    const effectiveCombo = this.combo + this.globalComboBonus;
+    const scoreResult = order.calculateScore(effectiveCombo, this.globalScoreMultiplier);
+
+    this.addScore(scoreResult.total, 640, 200, `+${scoreResult.total}`);
+
+    if (scoreResult.tip > 0) {
+      setTimeout(() => {
+        this.showFloatFeedback(640, 250, `小费 +${scoreResult.tip} 💰`, 'positive');
+      }, 200);
+    }
+
+    if (order.chainEffect) {
+      setTimeout(() => {
+        this.activateChainEffect(order.chainEffect);
+      }, 400);
+    }
+
+    const guestConfig = GUEST_CONFIG[order.guestType];
+    if (guestConfig && guestConfig.orderRefreshSpeed) {
+      this.orderSpawnTimer = Math.min(this.orderSpawnTimer, ORDER_SPAWN_INTERVAL * guestConfig.orderRefreshSpeed);
+    }
 
     if (this.combo >= 3) {
       setTimeout(() => {
@@ -455,13 +639,27 @@ export class GameScene extends Phaser.Scene {
   onOrderFailed(order) {
     this.ordersFailed++;
     this.combo = 0;
-    this.showFloatFeedback(640, 300, '订单超时!', 'negative');
+    this.consecutiveDodges = 0;
+    this.activeChainEffects = [];
+    this.recalculateGlobalModifiers();
+    this.showFloatFeedback(640, 300, `${order.guestName}不耐烦地离开了!`, 'negative');
   }
 
   onPlayerHitByTrap() {
-    if (this.player.takeDamage()) {
+    const result = this.player.takeDamage(true);
+    if (result && result.damaged) {
       this.addScore(-TRAP_DAMAGE_PENALTY, this.player.x, this.player.y - 40, '受伤!');
       this.combo = 0;
+      this.consecutiveDodges = 0;
+
+      if (result.dropped && result.dropped.length > 0) {
+        for (const ing of result.dropped) {
+          if (!this.ingredients.includes(ing)) {
+            this.ingredients.push(ing);
+          }
+        }
+        this.showFloatFeedback(this.player.x, this.player.y - 70, '菜品掉落!', 'negative');
+      }
       if (this.player.isDead()) {
         this.endGame();
       }
@@ -490,6 +688,8 @@ export class GameScene extends Phaser.Scene {
     this.hud.updateCombo(this.combo);
     this.hud.updateHealth(this.player.health, PLAYER_MAX_HEALTH);
     this.hud.updateInventory(this.player.inventory);
+    this.hud.updateChainEffects(this.activeChainEffects);
+    this.hud.updateSpeedBoost(this.player.speedBoostStacks, this.player.getSpeedBoostPercent());
     this.orderPanel.updateOrders(this.orders);
   }
 
@@ -504,7 +704,8 @@ export class GameScene extends Phaser.Scene {
           score: this.score,
           maxCombo: this.maxCombo,
           ordersCompleted: this.ordersCompleted,
-          ordersFailed: this.ordersFailed
+          ordersFailed: this.ordersFailed,
+          trapDodgeCount: this.trapDodgeCount
         });
       }
     });

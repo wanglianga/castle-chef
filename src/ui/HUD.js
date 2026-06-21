@@ -51,6 +51,16 @@ export class HUD {
     this.hintEl.className = 'hint-text';
     this.hintEl.id = 'hint-text';
     container.appendChild(this.hintEl);
+
+    this.chainEffectsEl = document.createElement('div');
+    this.chainEffectsEl.className = 'chain-effects';
+    this.chainEffectsEl.id = 'chain-effects';
+    container.appendChild(this.chainEffectsEl);
+
+    this.speedBoostEl = document.createElement('div');
+    this.speedBoostEl.className = 'speed-boost-indicator';
+    this.speedBoostEl.id = 'speed-boost';
+    container.appendChild(this.speedBoostEl);
   }
 
   updateTime(timeLeft) {
@@ -99,9 +109,42 @@ export class HUD {
     this.hintEl.classList.remove('visible');
   }
 
+  updateChainEffects(activeEffects) {
+    if (!activeEffects || activeEffects.length === 0) {
+      this.chainEffectsEl.innerHTML = '';
+      this.chainEffectsEl.classList.remove('visible');
+      return;
+    }
+
+    this.chainEffectsEl.classList.add('visible');
+    this.chainEffectsEl.innerHTML = activeEffects.map(effect => `
+      <div class="chain-effect" title="${effect.description}">
+        <span class="chain-effect-name">${effect.name}</span>
+        <span class="chain-effect-time">${Math.ceil(effect.timeLeft)}s</span>
+      </div>
+    `).join('');
+  }
+
+  updateSpeedBoost(stacks, percent) {
+    if (stacks <= 0) {
+      this.speedBoostEl.innerHTML = '';
+      this.speedBoostEl.classList.remove('visible');
+      return;
+    }
+
+    this.speedBoostEl.classList.add('visible');
+    const stars = '⚡'.repeat(stacks);
+    this.speedBoostEl.innerHTML = `
+      <span class="speed-boost-icon">${stars}</span>
+      <span class="speed-boost-text">加速 +${Math.round(percent)}%</span>
+    `;
+  }
+
   destroy() {
     this.hudEl.remove();
     this.inventoryEl.remove();
     this.hintEl.remove();
+    this.chainEffectsEl.remove();
+    this.speedBoostEl.remove();
   }
 }
